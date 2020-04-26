@@ -1,0 +1,56 @@
+---
+title: "Macro Fund Project 1.1 Part c: Economic Data Collecting"
+output: html_notebook
+---
+
+Load the data.
+Before we Started, a lot of macro economic data are in monthly frequencies. So also get the series of monthly returns. 
+```{r}
+source("utilities.r")
+research_daily_data <- load_csv_xts("data/research_set.csv")
+# monthly_returns <- collect_monthly(colnames(research_data),start_date = "2010-04-22")
+# write.csv(data.frame(date = index(monthly_returns),coredata(monthly_returns)),"data/monthly_returns.csv")
+# monthly_returns <- load_csv_xts("data/monthly_returns.csv")
+# Split it into research and backtest
+# research_monthly_data <- head(monthly_returns,n=nrow(monthly_returns)-12)
+# backtest_monthly_data <- tail(monthly_returns,n=12)
+US_returns <- load_csv_xts("data/US_returns.csv")
+```
+
+
+ICE BofA US High Yield Index Option-Adjusted Spread.
+The ICE BofAML Option-Adjusted Spreads (OASs) are the calculated spreads between a computed OAS index of all bonds in a given rating category and a spot Treasury curve. 
+TED is the TED spread.
+
+```{r}
+OAS <- getSymbols("BAMLH0A0HYM2",src="FRED",auto.assign = F)
+OAS <- na.omit(OAS)
+OAS <- OAS[index(US_returns)]
+TED <- getSymbols("TEDRATE",src="FRED",auto.assign = F)
+TED <- na.omit(TED)
+TED <- TED[index(US_returns)]
+TreasurySpread <- getSymbols("T10Y2Y",src="FRED",auto.assign = F)
+TreasurySpread <- na.omit(TreasurySpread)
+TreasurySpread <- TreasurySpread[index(US_returns)]
+```
+
+```{r}
+macro_economic_factors <- na.omit(merge.xts(OAS,TED,TreasurySpread))
+colnames(macro_economic_factors) <- c("OAS","TED","TreasurySpread")
+head(macro_economic_factors)
+```
+
+Save it to the csv.
+
+```{r}
+write.csv(data.frame(date = index(macro_economic_factors),coredata(macro_economic_factors)),"data/macro_factors.csv")
+macro_economic_factors <- load_csv_xts("data/macro_factors.csv")
+head(macro_economic_factors)
+```
+
+
+
+
+
+
+

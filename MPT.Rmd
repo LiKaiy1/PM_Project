@@ -1,0 +1,127 @@
+---
+title: "Second Part of Advanced Portfolio Management Project -- Walking Forward Portfolio Building"
+output: html_notebook
+author: "Kaiyi Li"
+---
+
+This part of the project aimed to build a efficient frontier based on previous data.
+## Load data and functions.
+```{r}
+source("helper.R")
+tickers <- c("SPY","TLT","HYG","LQD","GLD","BNO","VIXY")
+start_date <- "2011-03-11"
+num_of_tickers <- length(tickers)
+result <- collect_data(tickers,start_date)
+close_data <- result$close_data
+return_data <- result$return_data
+```
+
+## Walkforward Optimization
+```{r}
+# portf<- construct_portfolio(return_data = return_data,short = F,risk_measure = "CVaR")
+# portf<- construct_portfolio(return_data = return_data,short = T,risk_measure = "StdDev")
+portf<- construct_portfolio(return_data = return_data,short = T,risk_measure = "CVaR")
+rp <- random_portfolios(portf,1000,"sample")
+opt_rebalance <- optimize.portfolio.rebalancing(
+  R = return_data,
+  portf,
+  optimize_method = "ROI",
+  rp = rp,
+  rebalance_on = "months",
+  training_period = 5,
+  rolling_window = 10
+)
+
+```
+
+
+```{r}
+chart.Weights(opt_rebalance, main="Rebalanced Weights Over Time")
+extractWeights(opt_rebalance)
+```
+
+```{r}
+# weights <- c(0.6,0.1,0.1,-0.1,-0.1,-0.1,-0.5)
+portfolio_returns <- Return.portfolio(return_data,weights = extractWeights(opt_rebalance))
+# portfolio_returns <- Return.portfolio(return_data,weights = weights)
+rets_df <- cbind(portfolio_returns, return_data[,1:2])
+charts.PerformanceSummary(rets_df, main="P/L Over Time")
+```
+
+## Portfolio Performance Analysis
+The return distribution
+```{r}
+plot_return_distributions(portfolio_returns,column = 1,to_local = F)
+```
+Correlations
+```{r}
+chart.Correlation(na.omit(cbind(portfolio_returns,return_data)))
+```
+
+Daily VaR
+```{r}
+sapply(1:3,Calculate_VaR,return_data=rets_df,method = "Gaussian")
+```
+CVaR
+```{r}
+print("Portfolio CVaR")
+CVaR(portfolio_returns,method = "modified")[1]
+print("SPY  CVaR")
+CVaR(R = return_data[,1],method = "modified")[1]
+```
+
+
+Compare to Benchmark (SPY)
+```{r}
+chart.RelativePerformance(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2] )
+```
+
+Drawdown
+```{r}
+chart.Drawdown(na.omit(rets_df)[,1:2],legend.loc = "bottomleft")
+```
+
+Rolling Performance
+```{r}
+# chart.RollingCorrelation(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+chart.RollingRegression(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2],attribute = "Beta",width = 230)
+```
+
+Capture Ratio
+```{r}
+chart.CaptureRatios(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+```
+
+CAPM 
+```{r}
+print("alpha")
+CAPM.alpha(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+print("beta")
+CAPM.beta(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+print("Risk Premium")
+CAPM.RiskPremium(Ra = na.omit(rets_df)[,1])[1]
+print("Bear Beta")
+CAPM.beta.bear(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+print("Bull Beta")
+CAPM.beta.bull(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+print("Jesen's Alpha")
+CAPM.jensenAlpha(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+print("Annualized Excess")
+Return.annualized.excess(portfolio_returns,Rb = na.omit(rets_df)[,2])[1]
+```
+
+
+Save the weights and Portfolio Porformance to data folder and call it a day. 
+```{r}
+write.csv(data.frame(date=index(portfolio_returns), coredata(portfolio_returns))
+          ,file = "data/PortfolioReturns.csv")
+write.csv(data.frame(date=index(extractWeights(opt_rebalance)), coredata(extractWeights(opt_rebalance)))
+          ,file = "data/PortfolioWeights.csv")
+```
+
+
+
+
+
+
+

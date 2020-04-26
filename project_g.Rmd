@@ -1,0 +1,275 @@
+---
+title: "Macro Fund Project 1.1 Part f: Black Litterman Optimization -- Optimization."
+output: html_notebook
+---
+
+First, let's load all the data. 
+```{r}
+source("utilities.r")
+research_data <- load_csv_xts("data/research_set.csv")[,2:13]
+backtest_data <- load_csv_xts("data/backtest_set.csv")
+gspc <- backtest_data[,1]
+return_data <- backtest_data[,2:ncol(backtest_data)]
+macro_economic_factors <- head(load_csv_xts("data/macro_factors.csv"),n=nrow(research_data))
+```
+First. State our view.
+```{r}
+# for (i in 1:length(colnames(research_data))) {
+#   print(plot_return_distributions(research_data,i,to_local = F))
+# }
+```
+```{r}
+view <- generate_view(research_data)
+view
+```
+
+```{r}
+bl_estimate <- black.litterman(R=research_data,P=diag(12),Mu = view$view,Views = c(rep(0,10),1,1))
+mu <- t(bl_estimate$BLMu)
+```
+
+
+First, let's calculate the mean and covariance for each assets. 
+```{r}
+mean_returns <- mu
+cov_mat <- bl_estimate$BLSigma*252
+```
+
+Second, create random weights. For monte carlo simulation.
+```{r}
+num_of_ports <- 5000
+all_wts <- matrix(nrow = num_of_ports,ncol = length(colnames(research_data)))
+port_returns <- vector('numeric',length = num_of_ports)
+port_risk <- vector('numeric',length = num_of_ports)
+sharpes <- vector('numeric',length = num_of_ports)
+```
+Generate 5000 random portfolios.
+```{r}
+for (i in seq_along(port_returns)) {
+  
+  wts <- runif(length(colnames(research_data)))
+  wts <- wts/sum(wts)
+  
+  # Storing weight in the matrix
+  all_wts[i,] <- wts
+  
+  # Portfolio returns
+  
+  port_ret <- sum(wts * mean_returns)
+  port_ret <- ((port_ret + 1)^252) - 1
+  
+  # Storing Portfolio Returns values
+  port_returns[i] <- port_ret
+  
+  
+  # Creating and storing portfolio risk
+  port_sd <- sqrt(t(wts) %*% (cov_mat  %*% wts))
+  port_risk[i] <- port_sd
+  
+  # Creating and storing Portfolio Sharpe Ratios
+  # Assuming 0% Risk free rate
+  
+  sr <- port_ret/port_sd
+  sharpes[i] <- sr
+  
+}
+```
+Convert them to tibble.
+```{r}
+portfolio_values <- tibble(Return = port_returns,Risk = port_risk, SharpeRatios = sharpes)
+all_wts <- tk_tbl(all_wts)
+colnames(all_wts) <- colnames(research_data)
+portfolio_values <- tk_tbl(cbind(all_wts,portfolio_values))
+head(portfolio_values)
+```
+
+```{r}
+min_var <- portfolio_values[which.min(portfolio_values$Risk),]
+max_sharpe <- portfolio_values[which.max(portfolio_values$SharpeRatios),]
+```
+
+Backtest the minimum variance and tangency portfolios.
+```{r}
+macro_view <- c(rep(0,10),0.7,0.3)
+min_var_weights <- as.numeric(min_var[,1:12])
+max_sharpe_weights <- as.numeric(max_sharpe[,1:12])
+
+macro_returns <- Return.portfolio(R = return_data,weights = macro_view)
+minv_returns <- Return.portfolio(R = return_data,weights = min_var_weights)
+maxs_returns <- Return.portfolio(R = return_data,weights = max_sharpe_weights)
+
+charts.PerformanceSummary(R = cbind(gspc,macro_returns,minv_returns,maxs_returns),main = "P/L Over Time")
+
+
+```
+
+
+
+```{r}
+macro_returns <- Return.portfolio(R = return_data,weights = macro_view)
+minv_returns <- Return.portfolio(R = return_data,weights = min_var_weights)
+maxs_returns <- Return.portfolio(R = return_data,weights = max_sharpe_weights)
+
+rtn.obj <- merge(gspc,macro_returns,minv_returns,maxs_returns)
+colnames(rtn.obj) <- c("SPY","Macro","MinVar","MaxShar")
+```
+
+
+```{r}
+plot_backtest(return_set = rtn.obj,to_local = T)
+
+
+
+# # advanced charts.PerforanceSummary based on ggplot
+# gg.charts.PerformanceSummary <- function(rtn.obj, geometric = TRUE, main = "", plot = TRUE)
+# {
+# 
+#     # load libraries
+#     suppressPackageStartupMessages(require(ggplot2))
+#     suppressPackageStartupMessages(require(scales))
+#     suppressPackageStartupMessages(require(reshape))
+#     suppressPackageStartupMessages(require(PerformanceAnalytics))
+# 
+#     # create function to clean returns if having NAs in data
+#     clean.rtn.xts <- function(univ.rtn.xts.obj,na.replace=0){
+#         univ.rtn.xts.obj[is.na(univ.rtn.xts.obj)]<- na.replace
+#         univ.rtn.xts.obj
+#     }
+# 
+#     # Create cumulative return function
+#     cum.rtn <- function(clean.xts.obj, g = TRUE)
+#     {
+#         x <- clean.xts.obj
+#         if(g == TRUE){y <- cumprod(x+1)-1} else {y <- cumsum(x)}
+#         y
+#     }
+# 
+#     # Create function to calculate drawdowns
+#     dd.xts <- function(clean.xts.obj, g = TRUE)
+#     {
+#         x <- clean.xts.obj
+#         if(g == TRUE){y <- PerformanceAnalytics:::Drawdowns(x)} else {y <- PerformanceAnalytics:::Drawdowns(x,geometric = FALSE)}
+#         y
+#     }
+# 
+#     # create a function to create a dataframe to be usable in ggplot to replicate charts.PerformanceSummary
+#     cps.df <- function(xts.obj,geometric)
+#     {
+#         x <- clean.rtn.xts(xts.obj)
+#         series.name <- colnames(xts.obj)[1]
+#         tmp <- cum.rtn(x,geometric)
+#         tmp$rtn <- x
+#         tmp$dd <- dd.xts(x,geometric)
+#         colnames(tmp) <- c("Index","Return","Drawdown") # names with space
+#         tmp.df <- as.data.frame(coredata(tmp))
+#         tmp.df$Date <- as.POSIXct(index(tmp))
+#         tmp.df.long <- melt(tmp.df,id.var="Date")
+#         tmp.df.long$asset <- rep(series.name,nrow(tmp.df.long))
+#         tmp.df.long
+#     }
+# 
+#     # A conditional statement altering the plot according to the number of assets
+#     if(ncol(rtn.obj)==1)
+#     {
+#         # using the cps.df function
+#         df <- cps.df(rtn.obj,geometric)
+#         # adding in a title string if need be
+#         if(main == ""){
+#             title.string <- paste("Asset Performance")
+#         } else {
+#             title.string <- main
+#         }
+# 
+#         gg.xts <- ggplot(df, aes_string( x = "Date", y = "value", group = "variable" )) +
+#             facet_grid(variable ~ ., scales = "free_y", space = "fixed") +
+#             geom_line(data = subset(df, variable == "Index")) +
+#             geom_bar(data = subset(df, variable == "Return"), stat = "identity") +
+#             geom_line(data = subset(df, variable == "Drawdown")) +
+#             geom_hline(yintercept = 0, size = 0.5, colour = "black") +
+#             ggtitle(title.string) +
+#             theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+#             scale_x_datetime(breaks = date_breaks("6 months"), labels = date_format("%m/%Y")) +
+#             ylab("") +
+#             xlab("")
+# 
+#     }
+#     else
+#     {
+#         # a few extra bits to deal with the added rtn columns
+#         no.of.assets <- ncol(rtn.obj)
+#         asset.names <- colnames(rtn.obj)
+#         df <- do.call(rbind,lapply(1:no.of.assets, function(x){cps.df(rtn.obj[,x],geometric)}))
+#         df$asset <- ordered(df$asset, levels=asset.names)
+#         if(main == ""){
+#             title.string <- paste("Asset",asset.names[1],asset.names[2],asset.names[3],"Performance")
+#         } else {
+#             title.string <- main
+#         }
+# 
+#         if(no.of.assets>5){legend.rows <- 5} else {legend.rows <- no.of.assets}
+# 
+#         gg.xts <- ggplot(df, aes_string(x = "Date", y = "value" )) +
+# 
+#             # panel layout
+#             facet_grid(variable~., scales = "free_y", space = "fixed", shrink = TRUE, drop = TRUE, margin =
+#                            , labeller = label_value) + # label_value is default
+# 
+#             # display points for Index and Drawdown, but not for Return
+#             # geom_point(data = subset(df, variable == c("Index","Drawdown"))
+#             #            , aes(colour = factor(asset)), size = 1.2, show.legend = TRUE) +
+# 
+#             # manually select shape of geom_point
+#             # scale_shape_manual(values = c(1,2,3)) +
+# 
+#             # line colours for the Index
+#             geom_line(data = subset(df, variable == "Index"), aes(colour = factor(asset)), show.legend = T) +
+# 
+#             # bar colours for the Return
+#             geom_bar(data = subset(df,variable == "Return"), stat = "identity"
+#                      , aes(fill = factor(asset), colour = factor(asset)), position = "dodge", show.legend = FALSE) +
+# 
+#             # line colours for the Drawdown
+#             geom_line(data = subset(df, variable == "Drawdown"), aes(colour = factor(asset)), show.legend = FALSE) +
+# 
+#             # horizontal ticks
+#             scale_x_datetime(breaks = date_breaks("6 months"), labels = date_format("%m/%Y")) +
+# 
+#             # main y-axis title
+#             ylab("") +
+# 
+#             # main x-axis title
+#             xlab("") +
+# 
+#             # main chart title
+#             ggtitle(title.string)
+# 
+#     }
+# 
+#     assign("gg.xts", gg.xts,envir=.GlobalEnv)
+#     if(plot == TRUE){
+#         plot(gg.xts)
+#     } else {}
+# 
+# }
+# 
+# # display chart
+# gg.charts.PerformanceSummary(rtn.obj, geometric = TRUE)
+
+# ggplotly()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

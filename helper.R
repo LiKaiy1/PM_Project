@@ -6,6 +6,9 @@ library(gtable)
 library(grid)
 library(gridExtra)
 library(PerformanceAnalytics)
+library(PortfolioAnalytics)
+library(xts)
+library(timetk)
 theme_set(theme_classic())
 
 #Collect Data from Yahoo
@@ -63,11 +66,43 @@ plot_return_distributions <- function(return_data,column,to_local = F){
   return(distribution_plot)
 }
 
-# Calculate_VaR <- function(return_data,i,method){
-#   Value_at_Risk <- round(VaR(return_data[,i],method,p=0.95)[1],digits = 4)
-#   # VaR(return_data[,i],methods = methods)
-#   paste("Methods:",method,",Asset:",colnames(return_data)[i],",Daily VaR:",Value_at_Risk)
-# }
+Calculate_VaR <- function(return_data,i,method){
+  Value_at_Risk <- round(VaR(return_data[,i],method,p=0.95)[1],digits = 4)
+  # VaR(return_data[,i],methods = methods)
+  paste("Methods:",method,",Asset:",colnames(return_data)[i],",Daily VaR:",Value_at_Risk)
+}
+
+#Construct Portfolio
+construct_portfolio <- function(return_data,short=TRUE,risk_measure){
+  portf <- portfolio.spec(colnames(return_data))
+  portf <- add.constraint(portf, type="weight_sum", min_sum=0.99, max_sum=1.01)
+  portf <- add.objective(portf, type="risk", name=risk_measure)
+  if (short) {
+    portf <- add.constraint(portf, type="box", min=-0.499, max=1.501)
+  }
+  else{
+    portf <- add.constraint(portf, type="box", min=-0, max=1)
+  }
+  return(portf)
+}
+
+#Load csv to xts
+load_csv_xts <- function(path){
+  df <- read.csv(path)
+  len <- length(colnames(df))
+  df <- df[,2:len]
+  df$date = as.Date(df$date)
+  df <- xts::xts(df[,-1], order.by = df$date)
+}
+
+
+
+
+
+
+
+
+
 # 
 # relative_performance_to_SPY <- function(return_data = return_data,i) {
 #   chart.RelativePerformance(Ra = return_data[,1],Rb = return_data[,i])
@@ -75,11 +110,6 @@ plot_return_distributions <- function(return_data,column,to_local = F){
 # 
 # draw_downs <- function(return_data = return_data,i){chart.Drawdown(return_data[,i])}
 #   
-
-
-
-
-
 
 
 

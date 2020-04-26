@@ -1,0 +1,78 @@
+---
+title: "Macro Fund Project 1.1 Part b: Basic Profiling"
+output: html_notebook
+---
+
+
+Loading Data. 
+```{r}
+source("utilities.r")
+research_data <- load_csv_xts("data/research_set.csv")
+backtest_data <- load_csv_xts("data/backtest_set.csv")
+gspc <- backtest_data[,1]
+return_data <- backtest_data[,2:ncol(backtest_data)]
+```
+
+The correlation between each asset.
+```{r}
+chart.Correlation(research_data)
+```
+
+Let's assume that if we simply equally weighted the choosen assets.
+```{r}
+# weights <- rep(c(1/ncol(return_data)),times=ncol(return_data))
+weights <- c(0,0,0,0,0,0,0,0,0,0,2/3,1/3)
+# weights <- c(0,0,0,0,0,0,0,0,0,0,2/3,1/3)
+# weights <- rep(c(1/ncol(backtest_data)),times=ncol(backtest_data)
+# portfolio_return <- Return.portfolio(backtest_data,weights = weights)
+portfolio_return <- Return.portfolio(return_data,weights = weights)
+charts.PerformanceSummary(cbind(gspc,portfolio_return),main = "P/L Over Time")
+```
+
+Equally Weighted portfolio performance summary
+```{r}
+print("Portfolio CVaR")
+CVaR(portfolio_return,method = "modified")[1]
+print("SPY  CVaR")
+CVaR(R = gspc,method = "modified")[1]
+```
+
+Compare to Benchmark (SPY)
+```{r}
+chart.RelativePerformance(Ra = portfolio_return,Rb = gspc)
+```
+
+Drawdown
+```{r}
+chart.Drawdown(portfolio_return,legend.loc = "bottomleft")
+```
+
+Rolling Performance
+```{r}
+# chart.RollingCorrelation(Ra = na.omit(rets_df)[,1],Rb =na.omit(rets_df)[,2])
+chart.RollingRegression(Ra = portfolio_return,Rb =gspc,attribute = "Beta")
+```
+
+Capture Ratio
+```{r}
+chart.CaptureRatios(Ra = portfolio_return,Rb =gspc)
+```
+
+CAPM 
+```{r}
+print("alpha")
+CAPM.alpha(Ra = portfolio_return,Rb =gspc)
+print("beta")
+CAPM.beta(Ra = portfolio_return,Rb =gspc)
+print("Risk Premium")
+CAPM.RiskPremium(Ra = portfolio_return)[1]
+print("Bear Beta")
+CAPM.beta.bear(Ra = portfolio_return,Rb =gspc)
+print("Bull Beta")
+CAPM.beta.bull(Ra = portfolio_return,Rb =gspc)
+print("Jesen's Alpha")
+CAPM.jensenAlpha(Ra = portfolio_return,Rb =gspc)
+print("Annualized Excess")
+Return.annualized.excess(Rp = portfolio_return,Rb = gspc)[1]
+```
+

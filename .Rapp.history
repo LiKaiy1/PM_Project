@@ -1,0 +1,32 @@
+IRkernel::installspec()
+install.packages(c('repr', 'IRdisplay', 'IRkernel'), type = 'source')
+install.packages('IRkernel')
+install.packages(c('repr', 'IRdisplay', 'IRkernel'), type = 'source')
+getwd()
+setwd("/Users/likaiyi/Desktop/PM_Project/")
+source("helper.R")#
+tickers <- c("SPY","TLT","HYG","LQD","GLD","BNO","VIXY")#
+start_date <- "2011-03-11"#
+num_of_tickers <- length(tickers)#
+result <- collect_data(tickers,start_date)#
+close_data <- result$close_data#
+return_data <- result$return_data#
+#
+portf <- portfolio.spec(colnames(return_data))#
+portf <- add.constraint(portf, type="weight_sum", min_sum=0.01, max_sum=0.99)#
+portf <- add.constraint(portf, type="box", min=.10, max=.40)#
+portf <- add.objective(portf, type="return", name="mean")#
+portf <- add.objective(portf, type="risk", name="StdDev")#
+#
+optPort <- optimize.portfolio(return_data, portf, optimize_method = "ROI", trace=TRUE)#
+#
+rp <- random_portfolios(portf,10000,"sample")#
+opt_reblance <- optimize.portfolio.rebalancing(#
+  R = return_data,#
+  portf,#
+  optimize_method = "random",#
+  rp = rp,#
+  rebalance_on = "months",#
+  training_period = 1,#
+  rolling_window = 10#
+)

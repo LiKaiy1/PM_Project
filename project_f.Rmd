@@ -1,0 +1,86 @@
+---
+title: "Macro Fund Project 1.1 Part f: Black Litterman Optimization -- Generating a view."
+output: html_notebook
+---
+
+Loading the data.
+```{r}
+source("utilities.r")
+research_data <- load_csv_xts("data/research_set.csv")[,2:13]
+backtest_data <- load_csv_xts("data/backtest_set.csv")
+gspc <- backtest_data[,1]
+return_data <- backtest_data[,2:ncol(backtest_data)]
+macro_economic_factors <- head(load_csv_xts("data/macro_factors.csv"),n=nrow(research_data))
+```
+Plot the OAS and its circle.
+```{r}
+library(changepoint)
+OAS_for_plot <- data.frame(date = index(macro_economic_factors), OAS = coredata(macro_economic_factors$OAS))
+OAS_for_plot$OAS %>%
+  changepoint:: cpt.meanvar() %>%  # Identify change points
+  autoplot()
+```
+
+```{r}
+cpt.meanvar(OAS_for_plot$OAS)
+OAS_for_plot[1143,]
+```
+
+
+```{r}
+OAS_for_plot_ <- tail(OAS_for_plot,n=nrow(OAS_for_plot)-1143)
+cpt.meanvar(OAS_for_plot_$OAS)
+# autoplot(cpt.meanvar(OAS_for_plot_$OAS))
+OAS_for_plot_[1709,]
+```
+
+
+```{r}
+OAS_for_plot__ <- head(OAS_for_plot_,n=1709)
+cpt.meanvar(OAS_for_plot__$OAS)
+OAS_for_plot__[726,]
+```
+```{r}
+OAS_for_plot_ <- head(OAS_for_plot,n=1143)
+cpt.meanvar(OAS_for_plot_$OAS)
+OAS_for_plot_[624,]
+```
+
+
+```{r}
+ggplot(data = OAS_for_plot, aes(x = date, y = OAS))+geom_line()+
+  geom_vline(xintercept = as.Date("2007-11-01"),colour="red")+
+  geom_vline(xintercept = as.Date("2009-12-11"),colour="red")+
+  geom_vline(xintercept = as.Date("2016-12-06"),colour="red")+
+  geom_vline(xintercept = as.Date("2012-12-04"),colour="red")
+ggsave("plot/OAS_cycle.jpg",width = 12,height = 7)
+```
+
+
+
+```{r}
+ggplot(data = OAS_for_plot, aes(x = date, y = OAS))+geom_line()+
+  geom_vline(xintercept = as.Date("2016-01-01"),colour="red")+
+  geom_vline(xintercept = as.Date("2015-01-01"),colour="red")
+```
+We then use the mean return from 2015 to 2016 of each asset as our expected return.
+```{r}
+start.date = as.Date("2007-11-07")
+end.date = as.Date("2009-12-11")
+bl_data <- research_data[start.date <= index(research_data) & index(research_data) <= end.date]
+view_returns <- sort(colMeans(bl_data),decreasing = T)
+view_returns
+```
+
+```{r}
+write.csv(data.frame(date=index(bl_data),coredata(bl_data)),"data/bl_data.csv")
+bl_data <- load_csv_xts("data/bl_data.csv")
+head(bl_data)
+```
+
+
+
+
+
+
+

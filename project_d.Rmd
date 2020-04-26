@@ -1,0 +1,64 @@
+---
+title: "Macro Fund Project 1.1 Part d: Analysis of Economic Factors"
+output: html_notebook
+---
+Load All Data.
+```{r}
+source("utilities.r")
+research_data <- load_csv_xts("data/research_set.csv")
+macro_economic_factors <- load_csv_xts("data/macro_factors.csv")
+US_returns <- load_csv_xts("data/US_returns.csv")
+macro_economic_factors <- diff(log(macro_economic_factors))
+macro_research <- na.omit(merge.xts(research_data,macro_economic_factors))
+# macro_research <- na.omit(merge.xts(US_returns,macro_economic_factors))
+```
+
+Let's do the regression analysis.
+```{r}
+colnames(macro_research)
+macro_research <- na.omit(macro_research)
+macro_research <- macro_research[!is.infinite(rowSums(macro_research)),]
+model <- lm(macro_research$SPY~macro_research$OAS+macro_research$TED+macro_research$TreasurySpread)
+summary(model)
+```
+```{r}
+results <- c()
+for (i in 1:13) {
+  result <- rolling_regress(macro_research,i,to_local = T)
+  r_square_result <- rolling_regress_r_square(macro_research,i,to_local = T)
+  print(colnames(macro_research)[i])
+  results <- cbind(result)
+  print(summary(result))
+}
+```
+
+
+Our View:
+
+Most of stocks are too exposed to OAS, we should hedge against the business cycle. 
+
+We need to know what is the next wave of business cycle coming. 
+
+```{r}
+macro_economic_factors <- load_csv_xts("data/macro_factors.csv")
+autoplot(macro_economic_factors,facets=F)
+```
+
+Our view is that there is a another wave of recession at the time, and we should invest more into thoes who are negatively correlated with economy: LQD and TLT.
+
+
+Write the data to the disk. 
+
+```{r}
+write.csv(data.frame(date = index(macro_research),coredata(macro_research)),"data/macro_research.csv")
+macro_economic_factors <- load_csv_xts("data/macro_research.csv")
+head(macro_research)
+```
+
+
+
+
+
+
+
+

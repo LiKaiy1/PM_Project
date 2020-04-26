@@ -1,0 +1,143 @@
+---
+title: "Macro Fund Project 1.1 Part e: MPT Optimization, efficient frontier and backtest result"
+output: html_notebook
+---
+Load the data
+```{r}
+source("utilities.r")
+research_data <- load_csv_xts("data/research_set.csv")[,2:13]
+backtest_data <- load_csv_xts("data/backtest_set.csv")
+gspc <- backtest_data[,1]
+return_data <- backtest_data[,2:ncol(backtest_data)]
+```
+
+First, let's calculate the mean and covariance for each assets. 
+```{r}
+mean_returns <- colMeans(research_data)
+cov_mat <- cov(research_data)*252
+```
+
+Second, create random weights. For monte carlo simulation.
+```{r}
+num_of_ports <- 5000
+all_wts <- matrix(nrow = num_of_ports,ncol = length(colnames(research_data)))
+port_returns <- vector('numeric',length = num_of_ports)
+port_risk <- vector('numeric',length = num_of_ports)
+sharpes <- vector('numeric',length = num_of_ports)
+```
+Generate 5000 random portfolios.
+```{r}
+for (i in seq_along(port_returns)) {
+  
+  wts <- runif(length(colnames(research_data)))
+  wts <- wts/sum(wts)
+  
+  # Storing weight in the matrix
+  all_wts[i,] <- wts
+  
+  # Portfolio returns
+  
+  port_ret <- sum(wts * mean_returns)
+  port_ret <- ((port_ret + 1)^252) - 1
+  
+  # Storing Portfolio Returns values
+  port_returns[i] <- port_ret
+  
+  
+  # Creating and storing portfolio risk
+  port_sd <- sqrt(t(wts) %*% (cov_mat  %*% wts))
+  port_risk[i] <- port_sd
+  
+  # Creating and storing Portfolio Sharpe Ratios
+  # Assuming 0% Risk free rate
+  
+  sr <- port_ret/port_sd
+  sharpes[i] <- sr
+  
+}
+```
+Convert them to tibble.
+```{r}
+portfolio_values <- tibble(Return = port_returns,Risk = port_risk, SharpeRatios = sharpes)
+all_wts <- tk_tbl(all_wts)
+colnames(all_wts) <- colnames(research_data)
+portfolio_values <- tk_tbl(cbind(all_wts,portfolio_values))
+head(portfolio_values)
+```
+
+```{r}
+min_var <- portfolio_values[which.min(portfolio_values$Risk),]
+max_sharpe <- portfolio_values[which.max(portfolio_values$SharpeRatios),]
+```
+
+
+Plot the efficient frontier
+```{r}
+p <- portfolio_values %>%
+  ggplot(aes(x = Risk, y = Return, color = SharpeRatios)) +
+  geom_point() +
+  theme_classic() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = 'Annualized Risk',
+       y = 'Annualized Returns',
+       title = "Portfolio Optimization & Efficient Frontier") +
+  geom_point(aes(x = Risk,
+                 y = Return), data = min_var, color = 'red') +
+  geom_point(aes(x = Risk,
+                 y = Return), data = max_sharpe, color = 'red') +
+  annotate('text', x = 0.2, y = 0.3, label = "Tangency Portfolio") +
+  annotate('text', x = 0.15, y = 0.2, label = "Minimum variance portfolio") +
+  annotate(geom = 'segment', x = 0.2, xend = 0.154,  y = 0.3, 
+           yend = 0.163, color = 'red', arrow = arrow(type = "open")) +
+  annotate(geom = 'segment', x = 0.15, xend = 0.112,  y = 0.2, 
+           yend = 0.114, color = 'red', arrow = arrow(type = "open"))
+  
+p
+# ggsave("plot/EfficientFrontier.jpg",plot = p,width = 12,height = 7)
+```
+
+Backtest the minimum variance and tangency portfolios.
+```{r}
+view <- c(0,0,0,0,5/15,4/15,0,0,1/15,0,2/15,3/15)
+# view <- c(0,1/5,1/5,0,1/5,0,1/5,0,1/5,1/5,0,0)
+min_var_weights <- as.numeric(min_var[,1:12])
+max_sharpe_weights <- as.numeric(max_sharpe[,1:12])
+min_var_portfolio_return <- Return.portfolio(return_data,weights = min_var_weights)
+max_sharpe_portfolio_return <- Return.portfolio(return_data,weights = max_sharpe_weights)
+macro_portfolio_return <- Return.portfolio(return_data,weights = view)
+result <- data.frame(cbind(gspc,min_var_portfolio_return,max_sharpe_portfolio_return,macro_portfolio_return))
+colnames(result) <- c("SPY","Minimum Variance","Tangency Portfolio","Macro")
+charts.PerformanceSummary(R = cbind(gspc,min_var_portfolio_return,max_sharpe_portfolio_return,macro_portfolio_return),main = "P/L Over Time")
+```
+
+```{r}
+result <- xts(result,order.by = index(backtest_data))
+autoplot(result,facets = F)
+```
+
+
+```{r}
+clean_result <- data.frame(
+  SPY = cum.rtn(result[,1]),
+  MV = cum.rtn(result[,2]),
+  TP = cum.rtn(result[,3]),
+  Macro = cum.rtn(result[,4])
+)
+clean_result <- xts(clean_result,order.by = index(backtest_data))
+autoplot(clean_result,facets = F)
+# ggsave(filename = "plot/backtest_results.jpg",height = 7,width = 12)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

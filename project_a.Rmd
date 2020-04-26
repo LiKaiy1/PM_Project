@@ -1,0 +1,83 @@
+---
+title: "Macro Fund Project 1.1 Part a: Data Collection"
+output: html_notebook
+---
+
+
+Scrap the list of S&P 500 and CSI 300 from Wiki.
+```{r}
+source("utilities.r")
+sp_500 <- scrap_index_components("GSPC")
+write.csv(sp_500,"data/gics_list.csv")
+sp_500 <- read.csv("data/gics_list.csv")[,-1]
+```
+
+
+Plot the frequencies of each sector.
+For GICS:
+```{r}
+sp_500_counts <- sp_500 %>% group_by(Sector)
+sp_500_counts <- sp_500_counts %>% summarise("Counts"=n())
+ggplot(sp_500_counts, aes(x="", y=Counts, fill=Sector)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0)+theme_void()+ggtitle("S&P 500 Companies Sectors")
+ggsave("plot/GSPC_Sectors.jpeg")
+```
+
+
+
+Stock Selection. We are not focus on quantitative stocks picking. So we choose the stocks from each industry proportionally. 
+
+For US Portfolio:
+IT, COMM: AAPL, MSFT, GOOG, AMZN
+CS: WMT
+FIN: JPM, BAC, GS
+Industrials: BA
+Healthcare: JNJ
+Bonds:
+TLT, LQD, HYG
+
+Collecting US data rom Yahoo.
+```{r}
+US_tickers <- c("SPY","AAPL","MSFT","GOOG","GS","AMZN","WMT","JPM","BAC","JNJ","BA","TLT","LQD")
+US_result <- collect_data(US_tickers,start_date = "2005-04-21")
+```
+
+Rename and Save to csv. 
+```{r}
+US_returns <- US_result$return_data
+US_price <- US_result$close_data
+```
+
+Save files.
+```{r}
+write.csv(data.frame(date = index(US_returns),coredata(US_returns)),file = "data/US_returns.csv")
+write.csv(data.frame(date = index(US_price),coredata(US_price)),file = "data/US_prices.csv")
+```
+
+Try loading the files.
+```{r}
+US_price <- read.csv("data/US_prices.csv")
+US_returns <- load_csv_xts("data/US_returns.csv")
+US_price <- xts(US_price[,3:15],order.by =as.Date(US_price$X))
+
+```
+
+Devide the data into research used and backtesting used.
+```{r}
+research_set <- head(US_returns,n=3777-252)
+backtest_set <- tail(US_returns,n=252)
+write.csv(data.frame(date = index(research_set),coredata(research_set)),"data/research_set.csv")
+write.csv(data.frame(date = index(backtest_set),coredata(backtest_set)),"data/backtest_set.csv")
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,86 @@
+---
+title: "Final Project Part 1: Data Collection"
+output: html_notebook
+---
+
+Scrap the list of S&P 500 and CSI 300 from Wiki.
+```{r}
+source("utilities.r")
+# sp_500 <- scrap_index_components("GICS")
+# csi_300 <- scrap_index_components("CSI")
+# write.csv(csi_300,"data/csi_list.csv")
+# write.csv(sp_500,"data/gics_list.csv")
+sp_500 <- read.csv("data/gics_list.csv")[,-1]
+# csi_300 <- read.csv("data/csi_list.csv")[,-1]
+# colnames(csi_300) <- c("Index","Company","Stock.exchange","Weights","Segment")
+```
+
+
+Plot the frequencies of each sector.
+For GICS:
+```{r}
+sp_500_counts <- sp_500 %>% group_by(Sector)
+sp_500_counts <- sp_500_counts %>% summarise("Counts"=n())
+ggplot(sp_500_counts, aes(x="", y=Counts, fill=Sector)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0)+theme_void()+ggtitle("S&P 500 Companies Sectors")
+# ggsave("plot/GICS_Sectors.jpeg")
+```
+
+
+
+Stock Selection. We are not focus on quantitative stocks picking. So we choose the stocks from each industry proportionally. 
+
+For US Portfolio:
+IT, COMM: AAPL, MSFT, GOOG, FB, AMZN
+CS: WMT
+FIN: JPM, BAC
+Industrials: BA
+Healthcare: JNJ
+Bonds:
+TLT, LQD, HYG
+
+Collecting US data rom Yahoo.
+```{r}
+US_tickers <- c("^GSPC","AAPL","MSFT","GOOG","GS","AMZN","WMT","JPM","BAC","JNJ","BA")
+US_result <- collect_data(US_tickers,start_date = "2010-04-21")
+CH_tickers <- c("000300.SS","600837.SS","000002.SZ","000651.SZ","000725.SZ","600036.SS","600276.SS","600887.SS","600900.SS","601318.SS","601668.SS")
+CH_result <- collect_data(CH_tickers,start_date = "2010-04-21")
+```
+
+Rename and Save to csv. 
+```{r}
+CH_returns <- CH_result$return_data
+US_returns <- US_result$return_data
+ # c("000300.SS","600837.SS","000002.SZ","000651.SZ","000725.SZ","600036.SS","600276.SS","600887.SS","600900.SS","601318.SS","601668.SS")
+colnames(CH_returns) <- c("CSI","Haitong","VanKe","Gree","BOE","MerchantBanks","HengRui","YiLi","YangtZe","PingAn","CSCE")
+CH_returns <- na.omit(CH_returns)
+```
+
+Save files.
+```{r}
+write.csv(data.frame(date = index(CH_returns),coredata(CH_returns)),file = "data/CH_returns.csv")
+write.csv(data.frame(date = index(US_returns),coredata(US_returns)),file = "data/US_returns.csv")
+```
+
+Try loading the files.
+```{r}
+CH_returns <- load_csv_xts("data/CH_returns.csv")
+US_returns <- load_csv_xts("data/US_returns.csv")
+```
+
+Devide the data into research used and backtesting used.
+```{r}
+length(CH_returns)
+nrow(CH_returns)
+tail(CH_returns)
+```
+
+
+
+
+
+
+
+
+
